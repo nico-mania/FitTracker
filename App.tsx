@@ -1,8 +1,9 @@
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, TouchableOpacity, Modal, Switch } from 'react-native';
 import { Pedometer, Accelerometer } from 'expo-sensors';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Platform, PermissionsAndroid } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 async function requestPermissions() {
   if (Platform.OS === 'android') {
@@ -14,13 +15,60 @@ async function requestPermissions() {
   return true;
 }
 
+const RESET_HOURS = [0, 1, 2, 3, 4, 5, 6];
+
 export default function App() {
   const [androidSteps, setAndroidSteps] = useState(0);
   const [sensorSteps, setSensorSteps] = useState(0);
   const [stepCooldown, setStepCooldown] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(true); // Standard: Dark Mode
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [resetHour, setResetHour] = useState(4); // Standard: 4 Uhr
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Einstellungen laden
+  useEffect(() => {
+    async function loadSettings() {
+      const savedDark = await AsyncStorage.getItem('darkMode');
+      const savedReset = await AsyncStorage.getItem('resetHour');
+      if (savedDark !== null) setDarkMode(JSON.parse(savedDark));
+      if (savedReset !== null) setResetHour(JSON.parse(savedReset));
+    }
+    loadSettings();
+  }, []);
+
+  // Einstellungen speichern
+  useEffect(() => {
+    AsyncStorage.setItem('darkMode', JSON.stringify(darkMode));
+  }, [darkMode]);
+
+  useEffect(() => {
+    AsyncStorage.setItem('resetHour', JSON.stringify(resetHour));
+  }, [resetHour]);
+
+  // Täglicher Reset
+  useEffect(() => {
+    function scheduleReset() {
+      const now = new Date();
+      const next = new Date();
+      next.setHours(resetHour, 0, 0, 0);
+      if (next <= now) next.setDate(next.getDate() + 1); // Morgen
+      const msUntilReset = next.getTime() - now.getTime();
+
+      resetTimerRef.current = setTimeout(() => {
+        setAndroidSteps(0);
+        setSensorSteps(0);
+        scheduleReset(); // Nächsten Tag planen
+      }, msUntilReset);
+    }
+
+    scheduleReset();
+    return () => {
+      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    };
+  }, [resetHour]);
+
+  // Sensoren
   useEffect(() => {
     async function setup() {
       await requestPermissions();
@@ -95,14 +143,43 @@ export default function App() {
               </TouchableOpacity>
             </View>
 
+            {/* Dark Mode */}
             <View style={[styles.settingRow, { borderBottomColor: theme.border }]}>
               <Text style={[styles.settingLabel, { color: theme.text }]}>Dark Mode</Text>
               <Switch
                 value={darkMode}
                 onValueChange={setDarkMode}
                 trackColor={{ false: '#ccc', true: '#4CAF50' }}
-                thumbColor={darkMode ? '#fff' : '#fff'}
+                thumbColor='#fff'
               />
+            </View>
+
+            {/* Reset Uhrzeit */}
+            <View style={styles.settingBlock}>
+              <Text style={[styles.settingLabel, { color: theme.text }]}>
+                Täglicher Reset um {resetHour}:00 Uhr
+              </Text>
+              <View style={styles.hourPicker}>
+                {RESET_HOURS.map(hour => (
+                  <TouchableOpacity
+                    key={hour}
+                    onPress={() => setResetHour(hour)}
+                    style={[
+                      styles.hourButton,
+                      { backgroundColor: theme.background },
+                      resetHour === hour && styles.hourButtonActive,
+                    ]}
+                  >
+                    <Text style={[
+                      styles.hourText,
+                      { color: theme.subtext },
+                      resetHour === hour && styles.hourTextActive,
+                    ]}>
+                      {hour}:00
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
 
           </View>
@@ -208,7 +285,28 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderBottomWidth: 1,
   },
-  settingLabel: {
-    fontSize: 16,
+  settingBlock: {
+    paddingVertical: 16,
+  },
+  hourPicker: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  hourButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  hourButtonActive: {
+    backgroundColor: '#4CAF50',
+  },
+  hourText: {
+    fontSize: 14,
+  },
+  hourTextActive: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
 });
