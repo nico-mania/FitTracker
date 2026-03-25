@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "FitTracker",
-    "slug": "FitTracker",
+    "slug": "fittracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -11,20 +11,33 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "ios": {
-      "supportsTablet": true
-    },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "permissions": [
+        "android.permission.ACTIVITY_RECOGNITION",
+        "android.permission.BODY_SENSORS"
+      ],
+      "package": "com.manikarov.fittracker"
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
+    "ios": {
+      "supportsTablet": true
+    },
+    "plugins": [
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "Allow FitTracker to track your steps."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "5cd6aee4-6324-4ff2-98ef-aace72e80dbc"
+      }
     }
   }
 }
