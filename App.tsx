@@ -4,6 +4,7 @@ import { Platform, PermissionsAndroid, BackHandler } from 'react-native';
 import { Pedometer, Accelerometer } from 'expo-sensors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
+import * as FileSystem from 'expo-file-system';
 
 import { dark, light } from './src/theme';
 import HomeScreen from './src/screens/HomeScreen';
@@ -36,7 +37,7 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(true);
   const [resetHour, setResetHour] = useState(4);
   const [stepGoal, setStepGoal] = useState(10000);
-  const [displayMode, setDisplayMode] = useState<DisplayMode>('both');
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('android');
   const [history, setHistory] = useState<Record<string, number>>({});
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const androidStepsRef = useRef(0);
@@ -45,6 +46,22 @@ export default function App() {
   const stepBaseRef = useRef<number | null>(null);
 
   const theme = darkMode ? dark : light;
+
+  // Schritte aus Service-Datei laden
+  const loadStepsFromService = async () => {
+    try {
+      const path = 'file:///storage/emulated/0/Android/data/com.manikarov.fittracker/files/steps.txt';
+      const content = await FileSystem.readAsStringAsync(path);
+      const steps = parseInt(content.trim());
+      if (!isNaN(steps) && steps > androidStepsRef.current) {
+        setAndroidSteps(steps);
+        androidStepsRef.current = steps;
+        await AsyncStorage.setItem('currentSteps', steps.toString());
+      }
+    } catch (error) {
+      // Datei nicht vorhanden oder Fehler
+    }
+  };
 
   // Notification Handler einrichten
   useEffect(() => {
@@ -118,11 +135,18 @@ export default function App() {
           setAndroidSteps(steps);
           androidStepsRef.current = steps;
         }
+
+        // Schritte aus Service laden
+        await loadStepsFromService();
       } catch (error) {
         console.error('Error loading data:', error);
       }
     }
     loadData();
+
+    // Regelmäßig Schritte aus Service laden
+    const interval = setInterval(loadStepsFromService, 10000); // alle 10 sek
+    return () => clearInterval(interval);
   }, []);
 
   // Einstellungen speichern
@@ -277,7 +301,7 @@ export default function App() {
           stepGoal={stepGoal}
           theme={theme}
           displayMode={displayMode}
-          backgroundTrackingActive={false}
+          backgroundTrackingActive={true}
           onOpenSettings={() => setScreen('settings')}
           onOpenCalendar={() => setScreen('calendar')}
         />
