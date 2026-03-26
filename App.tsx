@@ -31,8 +31,14 @@ export default function App() {
   const [stepGoal, setStepGoal] = useState(10000);
   const [history, setHistory] = useState<Record<string, number>>({});
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const androidStepsRef = useRef(0);
+  const historyRef = useRef<Record<string, number>>({});
 
   const theme = darkMode ? dark : light;
+
+  // Refs synchron halten für Zugriff in Timern
+  useEffect(() => { androidStepsRef.current = androidSteps; }, [androidSteps]);
+  useEffect(() => { historyRef.current = history; }, [history]);
 
   // Einstellungen & Historie laden
   useEffect(() => {
@@ -44,7 +50,11 @@ export default function App() {
       if (savedDark !== null) setDarkMode(JSON.parse(savedDark));
       if (savedReset !== null) setResetHour(JSON.parse(savedReset));
       if (savedGoal !== null) setStepGoal(JSON.parse(savedGoal));
-      if (savedHistory !== null) setHistory(JSON.parse(savedHistory));
+      if (savedHistory !== null) {
+        const h = JSON.parse(savedHistory);
+        setHistory(h);
+        historyRef.current = h;
+      }
     }
     loadData();
   }, []);
@@ -62,7 +72,7 @@ export default function App() {
     AsyncStorage.setItem('stepGoal', JSON.stringify(stepGoal));
   }, [stepGoal]);
 
-  // Schritte täglich in Historie speichern
+  // Schritte in Historie speichern wenn sie sich ändern
   useEffect(() => {
     if (androidSteps === 0) return;
     const today = new Date();
@@ -72,37 +82,34 @@ export default function App() {
     AsyncStorage.setItem('stepHistory', JSON.stringify(updated));
   }, [androidSteps]);
 
-  // Täglicher Reset
-  useEffect(() => {
-    function scheduleReset() {
-      const now = new Date();
-      const next = new Date();
-      next.setHours(resetHour, 0, 0, 0);
-      if (next <= now) next.setDate(next.getDate() + 1);
-      const msUntilReset = next.getTime() - now.getTime();
-
-      resetTimerRef.current = setTimeout(() => {
-        setAndroidSteps(0);
-        setSensorSteps(0);
-        scheduleReset();
-      }, msUntilReset);
-    }
-
-    scheduleReset();
-    return () => {
-      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-    };
-  }, [resetHour]);
-
-  // Sensoren
+  // Sensoren & Reset
   useEffect(() => {
     async function setup() {
       await requestPermissions();
 
+      // Schritte seit Reset-Uhrzeit laden
+      async function fetchStepsSinceReset() {
+        const start = new Date();
+        start.setHours(resetHour, 0, 0, 0);
+        if (new Date() < start) start.setDate(start.getDate() - 1);
+        const end = new Date();
+        try {
+          const result = await Pedometer.getStepCountAsync(start, end);
+          setAndroidSteps(result.steps);
+          androidStepsRef.current = result.steps;
+        } catch (e) {
+          console.log('getStepCountAsync Fehler:', e);
+        }
+      }
+
+      await fetchStepsSinceReset();
+
+      // Live Updates
       const pedometerSub = Pedometer.watchStepCount((result) => {
         setAndroidSteps(result.steps);
       });
 
+      // Eigener Algorithmus
       Accelerometer.setUpdateInterval(100);
       const accelSub = Accelerometer.addListener(({ x, y, z }) => {
         const magnitude = Math.sqrt(x * x + y * y + z * z);
@@ -113,13 +120,43 @@ export default function App() {
         }
       });
 
+      // Täglicher Reset planen
+      function scheduleReset() {
+        const now = new Date();
+        const next = new Date();
+        next.setHours(resetHour, 0, 0, 0);
+        if (next <= now) next.setDate(next.getDate() + 1);
+        const msUntilReset = next.getTime() - now.getTime();
+
+        resetTimerRef.current = setTimeout(async () => {
+          // Gestrigen Tag in Historie speichern
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          const key = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+          const updated = { ...historyRef.current, [key]: androidStepsRef.current };
+          setHistory(updated);
+          await AsyncStorage.setItem('stepHistory', JSON.stringify(updated));
+
+          // Beide Zähler resetten
+          setAndroidSteps(0);
+          setSensorSteps(0);
+          androidStepsRef.current = 0;
+
+          scheduleReset();
+        }, msUntilReset);
+      }
+
+      scheduleReset();
+
       return () => {
         pedometerSub.remove();
         accelSub.remove();
+        if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
       };
     }
+
     setup();
-  }, []);
+  }, [resetHour]);
 
   return (
     <>
