@@ -4,7 +4,7 @@ A simple step counter app built with React Native and Bare Workflow.
 
 > This is a personal learning project. Expect bugs and rough edges!
 
-## Features (v0.3.0)
+## Features (v0.2.0)
 
 - 🏃 Step counting via Android Pedometer (Foreground Service)
 - 🔄 Background tracking – continues even when app is closed
@@ -18,14 +18,14 @@ A simple step counter app built with React Native and Bare Workflow.
 
 ## Installation
 
-1. Go to [Releases](../../releases) and download the latest APK (v0.3.0+)
+1. Go to [Releases](../../releases) and download the latest APK (v0.2.0+)
 2. Install on your Android device (sideloading must be enabled)
 3. Allow activity recognition & notification permissions on first launch
 4. App will start background service automatically – steps are tracked even when the app is closed
 
 > **Note:** iOS is not supported. Bare Workflow Android only.
 
-## What's New (v0.3.0)
+## What's New (v0.2.0)
 
 - **Background Service**: Native Kotlin Foreground Service for persistent step tracking
 - **Service-to-App Integration**: Service writes steps to file, app reads every 10 seconds
