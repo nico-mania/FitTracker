@@ -1,12 +1,14 @@
 import React from 'react';
 import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { Theme } from '../theme';
+import { DisplayMode } from './SettingsScreen';
 
 type Props = {
   androidSteps: number;
   sensorSteps: number;
   stepGoal: number;
   theme: Theme;
+  displayMode: DisplayMode;
   onOpenSettings: () => void;
   onOpenCalendar: () => void;
 };
@@ -16,9 +18,11 @@ export default function HomeScreen({
   sensorSteps,
   stepGoal,
   theme,
+  displayMode,
   onOpenSettings,
   onOpenCalendar,
 }: Props) {
+  const averageSteps = Math.round((androidSteps + sensorSteps) / 2);
   const progress = Math.min((androidSteps / stepGoal) * 100, 100);
   const progressText = progress.toFixed(0);
   const goalReached = androidSteps >= stepGoal;
@@ -77,19 +81,53 @@ export default function HomeScreen({
         )}
       </View>
 
-      {/* Android Pedometer Card */}
-      <View style={[styles.card, { backgroundColor: theme.card }]}>
-        <Text style={[styles.cardTitle, { color: theme.subtext }]}>Android Pedometer</Text>
-        <Text style={[styles.steps, { color: '#4CAF50' }]}>{androidSteps}</Text>
-        <Text style={[styles.label, { color: theme.subtext }]}>Schritte (OS)</Text>
-      </View>
+      {/* Beide anzeigen */}
+      {displayMode === 'both' && (
+        <>
+          <View style={[styles.card, { backgroundColor: theme.card }]}>
+            <Text style={[styles.cardTitle, { color: theme.subtext }]}>Android Pedometer</Text>
+            <Text style={[styles.steps, { color: '#4CAF50' }]}>{androidSteps}</Text>
+            <Text style={[styles.label, { color: theme.subtext }]}>Schritte (OS)</Text>
+          </View>
+          <View style={[styles.card, { backgroundColor: theme.card }]}>
+            <Text style={[styles.cardTitle, { color: theme.subtext }]}>Eigener Algorithmus</Text>
+            <Text style={[styles.steps, { color: '#2196F3' }]}>{sensorSteps}</Text>
+            <Text style={[styles.label, { color: theme.subtext }]}>Schritte (Sensor)</Text>
+          </View>
+        </>
+      )}
 
-      {/* Eigener Algorithmus Card */}
-      <View style={[styles.card, { backgroundColor: theme.card }]}>
-        <Text style={[styles.cardTitle, { color: theme.subtext }]}>Eigener Algorithmus</Text>
-        <Text style={[styles.steps, { color: '#2196F3' }]}>{sensorSteps}</Text>
-        <Text style={[styles.label, { color: theme.subtext }]}>Schritte (Sensor)</Text>
-      </View>
+      {/* Nur Android */}
+      {displayMode === 'android' && (
+        <View style={[styles.card, { backgroundColor: theme.card }]}>
+          <Text style={[styles.cardTitle, { color: theme.subtext }]}>Android Pedometer</Text>
+          <Text style={[styles.steps, { color: '#4CAF50' }]}>{androidSteps}</Text>
+          <Text style={[styles.label, { color: theme.subtext }]}>Schritte (OS)</Text>
+        </View>
+      )}
+
+      {/* Nur Sensor */}
+      {displayMode === 'sensor' && (
+        <View style={[styles.card, { backgroundColor: theme.card }]}>
+          <Text style={[styles.cardTitle, { color: theme.subtext }]}>Eigener Algorithmus</Text>
+          <Text style={[styles.steps, { color: '#2196F3' }]}>{sensorSteps}</Text>
+          <Text style={[styles.label, { color: theme.subtext }]}>Schritte (Sensor)</Text>
+        </View>
+      )}
+
+      {/* Durchschnitt */}
+      {displayMode === 'average' && (
+        <View style={[styles.card, { backgroundColor: theme.card }]}>
+          <Text style={[styles.cardTitle, { color: theme.subtext }]}>Durchschnitt</Text>
+          <Text style={[styles.steps, { color: '#FF9800' }]}>{averageSteps}</Text>
+          <Text style={[styles.label, { color: theme.subtext }]}>
+            Ø Android & Sensor
+          </Text>
+          <Text style={[styles.subInfo, { color: theme.subtext }]}>
+            📱 {androidSteps}  •  🔵 {sensorSteps}
+          </Text>
+        </View>
+      )}
 
     </View>
   );
@@ -189,5 +227,9 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     marginTop: 4,
+  },
+  subInfo: {
+    fontSize: 13,
+    marginTop: 8,
   },
 });

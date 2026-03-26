@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { dark, light } from './src/theme';
 import HomeScreen from './src/screens/HomeScreen';
-import SettingsScreen from './src/screens/SettingsScreen';
+import SettingsScreen, { DisplayMode } from './src/screens/SettingsScreen';
 import CalendarScreen from './src/screens/CalendarScreen';
 
 type Screen = 'home' | 'settings' | 'calendar';
@@ -29,12 +29,12 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(true);
   const [resetHour, setResetHour] = useState(4);
   const [stepGoal, setStepGoal] = useState(10000);
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('both');
   const [history, setHistory] = useState<Record<string, number>>({});
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const androidStepsRef = useRef(0);
   const historyRef = useRef<Record<string, number>>({});
   const resetHourRef = useRef(4);
-  // Basiswert beim Start – watchStepCount gibt kumulative Werte zurück
   const stepBaseRef = useRef<number | null>(null);
 
   const theme = darkMode ? dark : light;
@@ -50,10 +50,12 @@ export default function App() {
       const savedDark = await AsyncStorage.getItem('darkMode');
       const savedReset = await AsyncStorage.getItem('resetHour');
       const savedGoal = await AsyncStorage.getItem('stepGoal');
+      const savedDisplay = await AsyncStorage.getItem('displayMode');
       const savedHistory = await AsyncStorage.getItem('stepHistory');
       if (savedDark !== null) setDarkMode(JSON.parse(savedDark));
       if (savedReset !== null) setResetHour(JSON.parse(savedReset));
       if (savedGoal !== null) setStepGoal(JSON.parse(savedGoal));
+      if (savedDisplay !== null) setDisplayMode(JSON.parse(savedDisplay));
       if (savedHistory !== null) {
         const h = JSON.parse(savedHistory);
         setHistory(h);
@@ -76,6 +78,10 @@ export default function App() {
     AsyncStorage.setItem('stepGoal', JSON.stringify(stepGoal));
   }, [stepGoal]);
 
+  useEffect(() => {
+    AsyncStorage.setItem('displayMode', JSON.stringify(displayMode));
+  }, [displayMode]);
+
   // Historie speichern wenn Schritte sich ändern
   useEffect(() => {
     if (androidSteps === 0) return;
@@ -92,13 +98,10 @@ export default function App() {
     async function setup() {
       await requestPermissions();
 
-      // watchStepCount gibt Schritte seit letztem Update zurück
-      // Wir merken uns den ersten Wert als Basis und rechnen relativ dazu
       stepBaseRef.current = null;
 
       const pedometerSub = Pedometer.watchStepCount((result) => {
         if (stepBaseRef.current === null) {
-          // Erster Wert = Basis, Anzeige bleibt bei gespeichertem Wert
           stepBaseRef.current = result.steps;
           return;
         }
@@ -113,7 +116,6 @@ export default function App() {
         }
       });
 
-      // Eigener Algorithmus
       Accelerometer.setUpdateInterval(100);
       const accelSub = Accelerometer.addListener(({ x, y, z }) => {
         const magnitude = Math.sqrt(x * x + y * y + z * z);
@@ -124,7 +126,6 @@ export default function App() {
         }
       });
 
-      // Täglicher Reset
       function scheduleReset() {
         const now = new Date();
         const next = new Date();
@@ -133,7 +134,6 @@ export default function App() {
         const msUntilReset = next.getTime() - now.getTime();
 
         resetTimerRef.current = setTimeout(async () => {
-          // Gestrigen Tag in Historie speichern
           const yesterday = new Date();
           yesterday.setDate(yesterday.getDate() - 1);
           const key = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
@@ -142,7 +142,6 @@ export default function App() {
           historyRef.current = updated;
           await AsyncStorage.setItem('stepHistory', JSON.stringify(updated));
 
-          // Reset
           setAndroidSteps(0);
           setSensorSteps(0);
           androidStepsRef.current = 0;
@@ -173,6 +172,7 @@ export default function App() {
           sensorSteps={sensorSteps}
           stepGoal={stepGoal}
           theme={theme}
+          displayMode={displayMode}
           onOpenSettings={() => setScreen('settings')}
           onOpenCalendar={() => setScreen('calendar')}
         />
@@ -186,6 +186,8 @@ export default function App() {
           setResetHour={setResetHour}
           stepGoal={stepGoal}
           setStepGoal={setStepGoal}
+          displayMode={displayMode}
+          setDisplayMode={setDisplayMode}
           onClose={() => setScreen('home')}
         />
       )}
