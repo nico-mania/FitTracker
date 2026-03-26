@@ -57,6 +57,7 @@ export default function App() {
         setAndroidSteps(steps);
         androidStepsRef.current = steps;
         await AsyncStorage.setItem('currentSteps', steps.toString());
+        updateStepNotification(steps, stepGoal).catch(() => {});
       }
     } catch (error) {
       // Datei nicht vorhanden oder Fehler

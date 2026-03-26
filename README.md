@@ -21,16 +21,17 @@ A simple step counter app built with React Native and Bare Workflow.
 1. Go to [Releases](../../releases) and download the latest APK (v0.3.0+)
 2. Install on your Android device (sideloading must be enabled)
 3. Allow activity recognition & notification permissions on first launch
-4. App will start background service automatically – schritte werden auch ohne App im Vordergrund getrackt
+4. App will start background service automatically – steps are tracked even when the app is closed
 
 > **Note:** iOS is not supported. Bare Workflow Android only.
 
 ## What's New (v0.3.0)
 
-- **Background Service**: Native Kotlin Foreground Service für persistentes Schritt-Tracking
-- **Service-to-App Integration**: Service schreibt Schritte in Datei, App liest alle 10 Sekunden
-- **Calendar Improvements**: Zeigt nun auch Tage ohne Daten (0 Schritte) in Grau
-- **Better Persistence**: Schritte surviven App Neustart (Service startet automatisch)
+- **Background Service**: Native Kotlin Foreground Service for persistent step tracking
+- **Service-to-App Integration**: Service writes steps to file, app reads every 10 seconds
+- **Live Notification Sync**: Notification updates in real-time from background service (fixed 0/10000 bug)
+- **Calendar Improvements**: Days with no data now shown in gray
+- **Better Persistence**: Steps survive app restarts – service starts automatically
 
 ## Development
 
