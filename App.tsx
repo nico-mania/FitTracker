@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { Platform, PermissionsAndroid } from 'react-native';
+import { Platform, PermissionsAndroid, BackHandler } from 'react-native';
 import { Pedometer, Accelerometer } from 'expo-sensors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -38,6 +38,24 @@ export default function App() {
   const stepBaseRef = useRef<number | null>(null);
 
   const theme = darkMode ? dark : light;
+
+  // ✅ NEU: Android Zurück-Button / Swipe
+  useEffect(() => {
+    const backAction = () => {
+      if (screen !== 'home') {
+        setScreen('home');
+        return true;
+      }
+      return false;
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      backAction
+    );
+
+    return () => backHandler.remove();
+  }, [screen]);
 
   // Refs synchron halten
   useEffect(() => { androidStepsRef.current = androidSteps; }, [androidSteps]);
