@@ -9,6 +9,7 @@ type Props = {
   stepGoal: number;
   theme: Theme;
   displayMode: DisplayMode;
+  backgroundTrackingActive: boolean;
   onOpenSettings: () => void;
   onOpenCalendar: () => void;
 };
@@ -19,6 +20,7 @@ export default function HomeScreen({
   stepGoal,
   theme,
   displayMode,
+  backgroundTrackingActive,
   onOpenSettings,
   onOpenCalendar,
 }: Props) {
@@ -48,6 +50,15 @@ export default function HomeScreen({
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Warnung wenn Background Tracking nicht aktiv */}
+      {!backgroundTrackingActive && (
+        <View style={[styles.warningCard, { backgroundColor: '#FFF3CD', borderColor: '#FFECB5' }]}>
+          <Text style={[styles.warningText, { color: '#856404' }]}>
+            ⚠️ Hintergrund-Tracking nicht verfügbar. Schritte werden nur gezählt, solange die App offen ist.
+          </Text>
+        </View>
+      )}
 
       {/* Ziel Fortschritt Card */}
       <View style={[styles.card, { backgroundColor: theme.card }]}>
@@ -231,5 +242,16 @@ const styles = StyleSheet.create({
   subInfo: {
     fontSize: 13,
     marginTop: 8,
+  },
+  warningCard: {
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+    width: '80%',
+    borderWidth: 1,
+  },
+  warningText: {
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
