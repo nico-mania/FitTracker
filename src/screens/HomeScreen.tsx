@@ -19,7 +19,9 @@ export default function HomeScreen({
   onOpenSettings,
   onOpenCalendar,
 }: Props) {
-  const progress = Math.min((androidSteps / stepGoal) * 100, 100).toFixed(0);
+  const progress = Math.min((androidSteps / stepGoal) * 100, 100);
+  const progressText = progress.toFixed(0);
+  const goalReached = androidSteps >= stepGoal;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -43,17 +45,43 @@ export default function HomeScreen({
         </View>
       </View>
 
+      {/* Ziel Fortschritt Card */}
+      <View style={[styles.card, { backgroundColor: theme.card }]}>
+        <View style={styles.goalHeader}>
+          <Text style={styles.goalEmoji}>{goalReached ? '🎉' : '🏃'}</Text>
+          <View style={styles.goalNumbers}>
+            <Text style={[styles.goalCurrent, { color: goalReached ? '#4CAF50' : theme.text }]}>
+              {androidSteps.toLocaleString()}
+            </Text>
+            <Text style={[styles.goalSeparator, { color: theme.subtext }]}>
+              {' / '}{stepGoal.toLocaleString()} Schritte
+            </Text>
+          </View>
+          <Text style={[styles.goalPercent, { color: goalReached ? '#4CAF50' : theme.subtext }]}>
+            {progressText}%
+          </Text>
+        </View>
+        <View style={[styles.progressBar, { backgroundColor: theme.border }]}>
+          <View style={[
+            styles.progressFill,
+            {
+              width: `${progress}%` as any,
+              backgroundColor: goalReached ? '#4CAF50' : '#2196F3',
+            }
+          ]} />
+        </View>
+        {goalReached && (
+          <Text style={[styles.goalReachedText, { color: '#4CAF50' }]}>
+            Tagesziel erreicht! 🎉
+          </Text>
+        )}
+      </View>
+
       {/* Android Pedometer Card */}
       <View style={[styles.card, { backgroundColor: theme.card }]}>
         <Text style={[styles.cardTitle, { color: theme.subtext }]}>Android Pedometer</Text>
         <Text style={[styles.steps, { color: '#4CAF50' }]}>{androidSteps}</Text>
         <Text style={[styles.label, { color: theme.subtext }]}>Schritte (OS)</Text>
-        <View style={[styles.progressBar, { backgroundColor: theme.border }]}>
-          <View style={[styles.progressFill, { width: `${progress}%` as any }]} />
-        </View>
-        <Text style={[styles.goalText, { color: theme.subtext }]}>
-          {progress}% von {stepGoal.toLocaleString()} Schritten
-        </Text>
       </View>
 
       {/* Eigener Algorithmus Card */}
@@ -102,10 +130,52 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: 16,
-    padding: 30,
+    padding: 20,
     alignItems: 'center',
     width: '80%',
     elevation: 4,
+  },
+  goalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 12,
+    gap: 8,
+  },
+  goalEmoji: {
+    fontSize: 24,
+  },
+  goalNumbers: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  goalCurrent: {
+    fontSize: 22,
+    fontWeight: 'bold',
+  },
+  goalSeparator: {
+    fontSize: 14,
+    marginLeft: 2,
+  },
+  goalPercent: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  progressBar: {
+    width: '100%',
+    height: 10,
+    borderRadius: 5,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 5,
+  },
+  goalReachedText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 10,
   },
   cardTitle: {
     fontSize: 16,
@@ -119,21 +189,5 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     marginTop: 4,
-    marginBottom: 16,
-  },
-  progressBar: {
-    width: '100%',
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#4CAF50',
-    borderRadius: 4,
-  },
-  goalText: {
-    fontSize: 13,
-    marginTop: 6,
   },
 });
