@@ -1,5 +1,8 @@
-import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Switch, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import {
+  StyleSheet, Text, View, TouchableOpacity, Switch,
+  ScrollView, Modal, TextInput, KeyboardAvoidingView, Platform,
+} from 'react-native';
 import { Theme } from '../theme';
 
 export type DisplayMode = 'both' | 'android' | 'sensor' | 'average';
@@ -14,6 +17,7 @@ type Props = {
   setStepGoal: (value: number) => void;
   displayMode: DisplayMode;
   setDisplayMode: (value: DisplayMode) => void;
+  onReset: () => void;
   onClose: () => void;
 };
 
@@ -36,8 +40,30 @@ export default function SettingsScreen({
   setStepGoal,
   displayMode,
   setDisplayMode,
+  onReset,
   onClose,
 }: Props) {
+  const [modalVisible, setModalVisible] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+
+  const canConfirm = confirmText === 'reset';
+
+  function openModal() {
+    setConfirmText('');
+    setModalVisible(true);
+  }
+
+  function closeModal() {
+    setConfirmText('');
+    setModalVisible(false);
+  }
+
+  function handleConfirm() {
+    if (!canConfirm) return;
+    closeModal();
+    onReset();
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
 
@@ -161,7 +187,67 @@ export default function SettingsScreen({
           </View>
         </View>
 
+        {/* Daten zurücksetzen */}
+        <View style={[styles.section, { backgroundColor: theme.card }]}>
+          <Text style={[styles.sectionTitle, { color: theme.subtext }]}>DATEN</Text>
+          <TouchableOpacity style={styles.resetButton} onPress={openModal}>
+            <Text style={styles.resetButtonText}>Alle Schritte zurücksetzen</Text>
+          </TouchableOpacity>
+        </View>
+
       </ScrollView>
+
+      {/* Confirmation Modal */}
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeModal}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={[styles.modalBox, { backgroundColor: theme.card }]}>
+            <Text style={[styles.modalTitle, { color: '#e53935' }]}>⚠️ Achtung</Text>
+            <Text style={[styles.modalBody, { color: theme.text }]}>
+              Alle gespeicherten Schritte und der gesamte Kalender-Verlauf werden unwiderruflich gelöscht.
+            </Text>
+            <Text style={[styles.modalPrompt, { color: theme.subtext }]}>
+              Tippe <Text style={{ fontWeight: 'bold', color: theme.text }}>reset</Text> ein um zu bestätigen:
+            </Text>
+            <TextInput
+              style={[styles.modalInput, {
+                backgroundColor: theme.background,
+                color: theme.text,
+                borderColor: canConfirm ? '#e53935' : theme.border,
+              }]}
+              value={confirmText}
+              onChangeText={setConfirmText}
+              placeholder="reset"
+              placeholderTextColor={theme.subtext}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: theme.background }]}
+                onPress={closeModal}
+              >
+                <Text style={[styles.modalBtnText, { color: theme.text }]}>Abbrechen</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnDanger, { opacity: canConfirm ? 1 : 0.4 }]}
+                onPress={handleConfirm}
+                disabled={!canConfirm}
+              >
+                <Text style={[styles.modalBtnText, { color: '#fff' }]}>Zurücksetzen</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
     </View>
   );
 }
@@ -221,4 +307,48 @@ const styles = StyleSheet.create({
   hourButtonActive: { backgroundColor: '#4CAF50' },
   hourText: { fontSize: 14 },
   hourTextActive: { color: '#fff', fontWeight: 'bold' },
+  // Reset button
+  resetButton: {
+    backgroundColor: '#e53935',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  resetButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalBox: {
+    width: '100%',
+    borderRadius: 20,
+    padding: 24,
+    gap: 14,
+    elevation: 8,
+  },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', textAlign: 'center' },
+  modalBody: { fontSize: 14, lineHeight: 20, textAlign: 'center' },
+  modalPrompt: { fontSize: 14, textAlign: 'center' },
+  modalInput: {
+    borderWidth: 1.5,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 16,
+    textAlign: 'center',
+    letterSpacing: 2,
+  },
+  modalButtons: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  modalBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  modalBtnDanger: { backgroundColor: '#e53935' },
+  modalBtnText: { fontSize: 15, fontWeight: '600' },
 });

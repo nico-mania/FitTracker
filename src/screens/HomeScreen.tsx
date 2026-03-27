@@ -9,7 +9,6 @@ type Props = {
   stepGoal: number;
   theme: Theme;
   displayMode: DisplayMode;
-  backgroundTrackingActive: boolean;
   onOpenSettings: () => void;
   onOpenCalendar: () => void;
 };
@@ -20,14 +19,17 @@ export default function HomeScreen({
   stepGoal,
   theme,
   displayMode,
-  backgroundTrackingActive,
   onOpenSettings,
   onOpenCalendar,
 }: Props) {
   const averageSteps = Math.round((androidSteps + sensorSteps) / 2);
-  const progress = Math.min((androidSteps / stepGoal) * 100, 100);
+  const activeSteps =
+    displayMode === 'sensor'  ? sensorSteps :
+    displayMode === 'average' ? averageSteps :
+    androidSteps; // 'android' and 'both' use android as primary
+  const progress = Math.min((activeSteps / stepGoal) * 100, 100);
   const progressText = progress.toFixed(0);
-  const goalReached = androidSteps >= stepGoal;
+  const goalReached = activeSteps >= stepGoal;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -51,14 +53,6 @@ export default function HomeScreen({
         </View>
       </View>
 
-      {/* Warnung wenn Background Tracking nicht aktiv */}
-      {!backgroundTrackingActive && (
-        <View style={[styles.warningCard, { backgroundColor: '#FFF3CD', borderColor: '#FFECB5' }]}>
-          <Text style={[styles.warningText, { color: '#856404' }]}>
-            ⚠️ Hintergrund-Tracking nicht verfügbar. Schritte werden nur gezählt, solange die App offen ist.
-          </Text>
-        </View>
-      )}
 
       {/* Ziel Fortschritt Card */}
       <View style={[styles.card, { backgroundColor: theme.card }]}>
@@ -66,7 +60,7 @@ export default function HomeScreen({
           <Text style={styles.goalEmoji}>{goalReached ? '🎉' : '🏃'}</Text>
           <View style={styles.goalNumbers}>
             <Text style={[styles.goalCurrent, { color: goalReached ? '#4CAF50' : theme.text }]}>
-              {androidSteps.toLocaleString()}
+              {activeSteps.toLocaleString()}
             </Text>
             <Text style={[styles.goalSeparator, { color: theme.subtext }]}>
               {' / '}{stepGoal.toLocaleString()} Schritte
