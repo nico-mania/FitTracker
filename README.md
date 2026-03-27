@@ -1,77 +1,80 @@
 # FitTracker 🏃
 
-A simple step counter app built with React Native and Bare Workflow.
+Ein einfacher Schrittzähler für Android, gebaut mit React Native (Bare Workflow).
 
-> This is a personal learning project. Expect bugs and rough edges!
+> Persönliches Lernprojekt – Fehler und unfertige Ecken sind möglich.
 
-## Features (v0.2.0)
+## Features (v0.2.2)
 
-- 🏃 Step counting via Android Pedometer (Foreground Service)
-- 🔄 Background tracking – continues even when app is closed
-- 🔵 Custom algorithm using the accelerometer for comparison
-- 📊 Daily goal tracking with progress bar (5k, 10k, 15k, 20k steps)
-- 📅 Monthly calendar view – green = goal reached, red = missed, gray = no data
-- 🌙 Dark mode (default) and light mode
-- ⚙️ Configurable daily reset time
-- 💾 Persistent settings, history, and background step data
-- 📲 Step progress notifications (updates throughout the day)
+- 🏃 Schrittzählung per Android-Pedometer (Hardware-Sensor)
+- 🔄 Hintergrund-Tracking – zählt weiter wenn die App geschlossen ist (Foreground Service)
+- 🔵 Eigener Algorithmus per Beschleunigungssensor zum Vergleich
+- 📊 Tagesзiel mit Fortschrittsbalken (5k, 10k, 15k, 20k Schritte) – passt sich dem gewählten Anzeigemodus an
+- 📅 Monatskalender – grün = Ziel erreicht, rot = nicht erreicht, grau = keine Daten
+- 🌙 Dark Mode (Standard) und Light Mode
+- ⚙️ Einstellbare tägliche Reset-Uhrzeit (0–6 Uhr)
+- 💾 Persistente Schrittdaten – beide Zähler (Android & Sensor) überleben App-Neustarts
+- 🗑️ Manueller Reset in den Einstellungen mit Bestätigungs-Dialog
 
 ## Installation
 
-1. Go to [Releases](../../releases) and download the latest APK (v0.2.0+)
-2. Install on your Android device (sideloading must be enabled)
-3. Allow activity recognition & notification permissions on first launch
-4. App will start background service automatically – steps are tracked even when the app is closed
+1. Unter [Releases](../../releases) die neueste APK herunterladen (`0.2.2_FitTracker.apk`)
+2. Auf dem Android-Gerät installieren (Sideloading muss erlaubt sein)
+3. Beim ersten Start Aktivitätserkennung & Benachrichtigungsberechtigung erlauben
+4. Der Foreground Service startet automatisch – Schritte werden auch im Hintergrund gezählt
 
-> **Note:** iOS is not supported. Bare Workflow Android only.
+> **Hinweis:** iOS wird nicht unterstützt. Nur Android (Bare Workflow).
 
-## What's New (v0.2.0)
+## Neu in v0.2.2
 
-- **Background Service**: Native Kotlin Foreground Service for persistent step tracking
-- **Service-to-App Integration**: Service writes steps to file, app reads every 10 seconds
-- **Live Notification Sync**: Notification updates in real-time from background service (fixed 0/10000 bug)
-- **Calendar Improvements**: Days with no data now shown in gray
-- **Better Persistence**: Steps survive app restarts – service starts automatically
+- **Manueller Reset** – Roter Button in Einstellungen löscht alle Schritte & Verlauf nach Bestätigung (`reset` eintippen)
+- **Sensor-Schritte persistent** – eigener Algorithmus-Zähler wird jetzt ebenfalls gespeichert und nach Neustart wiederhergestellt
+- **Fortschrittsbalken nach Anzeigemodus** – Ziel und Balken berechnen sich aus dem jeweils aktiven Zähler (Android / Sensor / Durchschnitt)
 
-## Development
+## Änderungsverlauf
 
-Built with:
+### v0.2.1
+- **Tagesgrenze nach Reset-Uhrzeit** – Schritte von Mitternacht bis zur Reset-Stunde werden dem richtigen Tag zugeordnet
+- **Doppelte Notification entfernt** – nur noch eine Notification vom Foreground Service (keine Abweichung mehr zwischen Anzeige und Benachrichtigung)
+- **Service läuft im echten Hintergrund** – `onDestroy()` stoppt den Service nicht mehr; `START_STICKY` sorgt für automatischen Neustart
+- **Datei-Kommunikation korrigiert** – Service schreibt in `filesDir` (intern), JS liest über `FileSystem.documentDirectory` (gleicher Pfad)
+- **Steps nach Neustart persistent** – `currentStepsDate` wird mitgespeichert, veraltete Werte werden verworfen
+
+### v0.2.0
+- **Foreground Service** – nativer Kotlin-Service für Hintergrund-Tracking
+- **Service-Synchronisation** – Service schreibt Schritte in Datei, App liest alle 5 Sekunden
+- **Kalender-Verbesserungen** – Tage ohne Daten werden grau dargestellt
+
+## Entwicklung
+
+Gebaut mit:
 - [React Native](https://reactnative.dev/) (Bare Workflow)
-- [expo-sensors](https://docs.expo.dev/versions/latest/sdk/sensors/) for step counting
-- [expo-notifications](https://docs.expo.dev/versions/latest/sdk/notifications/) for step tracking notifications
-- [AsyncStorage](https://react-native-async-storage.github.io/async-storage/) for persistent storage
+- [expo-sensors](https://docs.expo.dev/versions/latest/sdk/sensors/) – Pedometer & Beschleunigungssensor
+- [expo-file-system](https://docs.expo.dev/versions/latest/sdk/filesystem/) – Kommunikation mit dem nativen Service
+- [expo-notifications](https://docs.expo.dev/versions/latest/sdk/notifications/) – Benachrichtigungskanal
+- [AsyncStorage](https://react-native-async-storage.github.io/async-storage/) – persistente Speicherung
 
-### Getting Started
+### Lokaler Start
 ```bash
-# Clone the repo
 git clone https://github.com/manikarov/FitTracker.git
 cd FitTracker
-
-# Install dependencies
 npm install
-
-# For development (Expo)
 npx expo start --dev-client
 ```
 
-### Building Locally
+### APK lokal bauen
 
-**Prerequisites:**
-- Android Studio (with SDK tools installed)
-- Set ANDROID_HOME environment variable
+**Voraussetzungen:** Android Studio + ANDROID_HOME gesetzt
 
 ```bash
-# Generate Android native code (if not already done)
-npx expo prebuild --clean
+# APK bauen
+cd android && ./gradlew assembleRelease
 
-# Build APK locally (faster than EAS cloud)
-npm run android:local
-
-# APK location: android/app/build/outputs/apk/release/
+# APK liegt unter:
+# android/app/build/outputs/apk/release/<version>_FitTracker.apk
 ```
 
-### Building with EAS (Cloud)
+### EAS Cloud Build
 ```bash
-# Preview APK (cloud build)
 eas build --profile preview --platform android
 ```
