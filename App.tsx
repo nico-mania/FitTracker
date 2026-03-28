@@ -47,21 +47,26 @@ async function requestPermissions() {
 
 export default function App() {
   const [screen, setScreen]               = useState<Screen>('home');
-  const [androidSteps, setAndroidSteps]   = useState(0);
-  const [sensorSteps,  setSensorSteps]    = useState(0);
+  const [androidSteps,          setAndroidSteps]          = useState(0);
+  const [sensorSteps,           setSensorSteps]           = useState(0);
+  const [totalPedometerSteps,   setTotalPedometerSteps]   = useState(0);
   const [darkMode,     setDarkMode]       = useState(true);
   const [resetHour,    setResetHour]      = useState(4);
   const [stepGoal,     setStepGoal]       = useState(10000);
   const [displayMode,  setDisplayMode]    = useState<DisplayMode>('android');
   const [history,      setHistory]        = useState<Record<string, number>>({});
 
-  const resetTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const androidStepsRef    = useRef(0);
-  const historyRef         = useRef<Record<string, number>>({});
-  const resetHourRef       = useRef(4);
-  const pedometerBaseRef   = useRef<number | null>(null);
-  const sensorStepsRef     = useRef(0);
-  const stepCooldownRef    = useRef(false);
+  const resetTimerRef           = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const androidStepsRef         = useRef(0);
+  const historyRef              = useRef<Record<string, number>>({});
+  const resetHourRef            = useRef(4);
+  const pedometerBaseRef        = useRef<number | null>(null);
+  const sensorStepsRef          = useRef(0);
+  const stepCooldownRef         = useRef(false);
+  // Delta recovery: track raw hardware counter across sessions
+  const lastPedometerTotalRef   = useRef<number | null>(null);
+  const startupBaseStepsRef     = useRef(0);
+  const periodChangedOnStartup  = useRef(false);
 
   const theme = darkMode ? dark : light;
 
@@ -96,17 +101,21 @@ export default function App() {
     if (isNaN(steps) || steps < 0) return;
 
     const dayRaw = await readServiceFile(DAY_FILE);
-    const serviceDayKey  = dayRaw?.trim();
+    const serviceDayKey  = dayRaw?.trim() ?? null;
     const expectedDayKey = getTodayKey(resetHourRef.current);
 
-    // Service is still on a previous day — wait for it to reset
-    if (serviceDayKey && serviceDayKey !== expectedDayKey) return;
+    // day.txt is required — if missing we can't verify the data is for today
+    if (!serviceDayKey) return;
+
+    if (serviceDayKey !== expectedDayKey) {
+      // Service is tracking a different (stale) day → tell it to reset
+      await writeServiceFile(RESET_SIGNAL_FILE, 'reset');
+      return;
+    }
 
     if (steps > androidStepsRef.current) {
       setAndroidSteps(steps);
       androidStepsRef.current = steps;
-      // Also advance the pedometer base so delta tracking doesn't double-count
-      pedometerBaseRef.current = null;
 
       await AsyncStorage.setItem('currentSteps', steps.toString());
       await AsyncStorage.setItem('currentStepsDate', expectedDayKey);
@@ -166,6 +175,7 @@ export default function App() {
           savedDark, savedReset, savedGoal, savedDisplay,
           savedHistory, savedSteps, savedStepsDate,
           savedSensorSteps, savedSensorStepsDate,
+          savedPedTotal,
         ] = await Promise.all([
           AsyncStorage.getItem('darkMode'),
           AsyncStorage.getItem('resetHour'),
@@ -176,6 +186,7 @@ export default function App() {
           AsyncStorage.getItem('currentStepsDate'),
           AsyncStorage.getItem('currentSensorSteps'),
           AsyncStorage.getItem('currentSensorStepsDate'),
+          AsyncStorage.getItem('lastPedometerTotal'),
         ]);
 
         if (savedDark    !== null) setDarkMode(JSON.parse(savedDark));
@@ -197,6 +208,8 @@ export default function App() {
 
         // Restore saved steps only if they belong to the current tracking period
         const todayKey = getTodayKey(loadedResetHour);
+        const stepsAreStale = savedStepsDate !== null && savedStepsDate !== todayKey;
+
         if (savedSteps !== null && savedStepsDate === todayKey) {
           const steps = parseInt(savedSteps, 10);
           if (!isNaN(steps) && steps > 0) {
@@ -210,6 +223,20 @@ export default function App() {
             setSensorSteps(steps);
             sensorStepsRef.current = steps;
           }
+        }
+
+        // Capture startup state for pedometer delta recovery (used in first sensor callback)
+        startupBaseStepsRef.current  = androidStepsRef.current;
+        periodChangedOnStartup.current = stepsAreStale;
+        if (savedPedTotal !== null) {
+          const n = parseInt(savedPedTotal, 10);
+          if (!isNaN(n) && n >= 0) lastPedometerTotalRef.current = n;
+        }
+
+        // If saved data is from a previous period, proactively signal the service to reset
+        // (handles cases where the JS timer didn't fire while the app was closed)
+        if (stepsAreStale) {
+          await writeServiceFile(RESET_SIGNAL_FILE, 'reset');
         }
 
         // Supplement with service file (may have more steps from background tracking)
@@ -265,8 +292,52 @@ export default function App() {
         pedometerBaseRef.current = null;
         pedometerSub = Pedometer.watchStepCount(result => {
           if (pedometerBaseRef.current === null) {
-            // First event: set base, don't add steps yet
+            // First event: set base, then check for missed steps since last session
             pedometerBaseRef.current = result.steps;
+
+            const prev = lastPedometerTotalRef.current;
+            if (prev !== null && result.steps > prev) {
+              const missed = result.steps - prev;
+              const key = getTodayKey(resetHourRef.current);
+
+              // Ignore implausibly large deltas — app was closed for days,
+              // pedometer accumulated steps from multiple periods
+              if (missed > 10000) {
+                // Skip recovery; just anchor for this session
+              } else if (periodChangedOnStartup.current) {
+                // New period: only recover if the service didn't already have data
+                // (i.e., androidStepsRef is still 0 — service was also absent)
+                if (androidStepsRef.current === 0 && missed > 0) {
+                  setAndroidSteps(missed);
+                  androidStepsRef.current = missed;
+                  AsyncStorage.setItem('currentSteps', missed.toString()).catch(() => {});
+                  AsyncStorage.setItem('currentStepsDate', key).catch(() => {});
+                  const updated = { ...historyRef.current, [key]: missed };
+                  historyRef.current = updated;
+                  setHistory(updated);
+                  AsyncStorage.setItem('stepHistory', JSON.stringify(updated)).catch(() => {});
+                }
+              } else {
+                // Same period: use max(service/saved, startupBase + missed)
+                const recovered = startupBaseStepsRef.current + missed;
+
+                if (recovered > androidStepsRef.current) {
+                  setAndroidSteps(recovered);
+                  androidStepsRef.current = recovered;
+                  AsyncStorage.setItem('currentSteps', recovered.toString()).catch(() => {});
+                  AsyncStorage.setItem('currentStepsDate', key).catch(() => {});
+                  const updated = { ...historyRef.current, [key]: recovered };
+                  historyRef.current = updated;
+                  setHistory(updated);
+                  AsyncStorage.setItem('stepHistory', JSON.stringify(updated)).catch(() => {});
+                }
+              }
+            }
+
+            // Persist current hardware total for the next session
+            lastPedometerTotalRef.current = result.steps;
+            AsyncStorage.setItem('lastPedometerTotal', result.steps.toString()).catch(() => {});
+            setTotalPedometerSteps(result.steps);
             return;
           }
           const delta = result.steps - pedometerBaseRef.current;
@@ -277,11 +348,19 @@ export default function App() {
               return updated;
             });
             pedometerBaseRef.current = result.steps;
+            setTotalPedometerSteps(result.steps);
 
-            // Persist every step update
+            // Persist every step update (including intermediate calendar entry)
             const key = getTodayKey(resetHourRef.current);
             AsyncStorage.setItem('currentSteps', androidStepsRef.current.toString()).catch(() => {});
             AsyncStorage.setItem('currentStepsDate', key).catch(() => {});
+            lastPedometerTotalRef.current = result.steps;
+            AsyncStorage.setItem('lastPedometerTotal', result.steps.toString()).catch(() => {});
+            // Keep calendar history in sync so it survives crashes mid-day
+            const histUpdated = { ...historyRef.current, [key]: androidStepsRef.current };
+            historyRef.current = histUpdated;
+            setHistory(histUpdated);
+            AsyncStorage.setItem('stepHistory', JSON.stringify(histUpdated)).catch(() => {});
           }
         });
 
@@ -325,18 +404,25 @@ export default function App() {
               setSensorSteps(0);
               androidStepsRef.current = 0;
               sensorStepsRef.current = 0;
+              // Save hardware total at reset so next session knows steps before this reset
+              if (pedometerBaseRef.current !== null) {
+                lastPedometerTotalRef.current = pedometerBaseRef.current;
+              }
               pedometerBaseRef.current = null;
 
               const newKey = getTodayKey(resetHourRef.current);
+              const pedTotal = lastPedometerTotalRef.current;
               await AsyncStorage.multiSet([
                 ['currentSteps', '0'],
                 ['currentStepsDate', newKey],
                 ['currentSensorSteps', '0'],
                 ['currentSensorStepsDate', newKey],
+                ...(pedTotal !== null ? [['lastPedometerTotal', pedTotal.toString()] as [string, string]] : []),
               ]);
 
               // Tell the service to reset
               await writeServiceFile(RESET_SIGNAL_FILE, 'reset');
+              await Notifications.dismissAllNotificationsAsync().catch(() => {});
 
               scheduleReset();
             } catch (e) {
@@ -370,21 +456,29 @@ export default function App() {
       setSensorSteps(0);
       androidStepsRef.current = 0;
       sensorStepsRef.current = 0;
+      if (pedometerBaseRef.current !== null) {
+        lastPedometerTotalRef.current = pedometerBaseRef.current;
+      }
       pedometerBaseRef.current = null;
 
       const emptyHistory = {};
       setHistory(emptyHistory);
       historyRef.current = emptyHistory;
 
+      const pedTotal = lastPedometerTotalRef.current;
       await AsyncStorage.multiSet([
         ['currentSteps', '0'],
         ['currentStepsDate', key],
         ['currentSensorSteps', '0'],
         ['currentSensorStepsDate', key],
         ['stepHistory', '{}'],
+        ...(pedTotal !== null ? [['lastPedometerTotal', pedTotal.toString()] as [string, string]] : []),
       ]);
 
       await writeServiceFile(RESET_SIGNAL_FILE, 'reset');
+      // Dismiss any lingering expo notifications so the service notification
+      // rebuilds cleanly from 0 on the next update.
+      await Notifications.dismissAllNotificationsAsync().catch(() => {});
     } catch (e) {
       console.error('Manual reset error:', e);
     }
@@ -402,6 +496,7 @@ export default function App() {
           stepGoal={stepGoal}
           theme={theme}
           displayMode={displayMode}
+          totalPedometerSteps={totalPedometerSteps}
           onOpenSettings={() => setScreen('settings')}
           onOpenCalendar={() => setScreen('calendar')}
         />
@@ -426,6 +521,7 @@ export default function App() {
           theme={theme}
           stepGoal={stepGoal}
           history={history}
+          resetHour={resetHour}
           onClose={() => setScreen('home')}
         />
       )}

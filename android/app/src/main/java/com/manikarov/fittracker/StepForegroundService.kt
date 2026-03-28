@@ -131,7 +131,7 @@ class StepForegroundService : Service(), SensorEventListener {
       }
 
       schedulePeriodicCheck()
-    }, 30_000L)
+    }, 5_000L)
   }
 
   // Returns true and cleans up if a JS reset signal file exists.

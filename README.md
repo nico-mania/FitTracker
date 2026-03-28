@@ -4,7 +4,7 @@ Ein einfacher Schrittzähler für Android, gebaut mit React Native (Bare Workflo
 
 > Persönliches Lernprojekt – Fehler und unfertige Ecken sind möglich.
 
-## Features (v0.2.2)
+## Features (v0.3.0)
 
 - 🏃 Schrittzählung per Android-Pedometer (Hardware-Sensor)
 - 🔄 Hintergrund-Tracking – zählt weiter wenn die App geschlossen ist (Foreground Service)
@@ -15,15 +15,24 @@ Ein einfacher Schrittzähler für Android, gebaut mit React Native (Bare Workflo
 - ⚙️ Einstellbare tägliche Reset-Uhrzeit (0–6 Uhr)
 - 💾 Persistente Schrittdaten – beide Zähler (Android & Sensor) überleben App-Neustarts
 - 🗑️ Manueller Reset in den Einstellungen mit Bestätigungs-Dialog
+- 🔁 Delta-Recovery – Schritte, die bei geschlossener App gezählt wurden, werden beim nächsten Öffnen nachträglich verrechnet
+- 📟 Gesamtschritte des Geräts – zeigt die kumulative Pedometer-Zahl des Smartphones
 
 ## Installation
 
-1. Unter [Releases](../../releases) die neueste APK herunterladen (`0.2.2_FitTracker.apk`)
+1. Unter [Releases](../../releases) die neueste APK herunterladen (`0.3.0_FitTracker.apk`)
 2. Auf dem Android-Gerät installieren (Sideloading muss erlaubt sein)
 3. Beim ersten Start Aktivitätserkennung & Benachrichtigungsberechtigung erlauben
 4. Der Foreground Service startet automatisch – Schritte werden auch im Hintergrund gezählt
 
 > **Hinweis:** iOS wird nicht unterstützt. Nur Android (Bare Workflow).
+
+## Neu in v0.3.0
+
+- **Delta-Recovery** – beim Öffnen der App werden Schritte, die das Hardware-Pedometer während der App geschlossen war, korrekt dem laufenden Tag angerechnet; Schutz vor Fehlzuordnung bei sehr langen Pausen (>10.000-Schritte-Cap)
+- **Geräte-Gesamtschritte** – neue Info-Box am unteren Rand des Homescreens zeigt die kumulative Pedometer-Zahl des Geräts (z. B. „3.640.417 Schritte – das sind etwa 3,6 Millionen")
+- **Kalender-Datumsgrenze korrigiert** – „Heute"-Markierung und Zukunftstage im Kalender berücksichtigen jetzt korrekt die eingestellte Reset-Uhrzeit
+- **Kalender-History zwischenspeichern** – Schritte werden bei jedem Schritt-Event in den Kalender geschrieben, nicht erst beim Reset
 
 ## Neu in v0.2.2
 
