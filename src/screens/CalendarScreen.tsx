@@ -6,8 +6,15 @@ type Props = {
   theme: Theme;
   stepGoal: number;
   history: Record<string, number>;
+  resetHour: number;
   onClose: () => void;
 };
+
+function getTodayKey(resetHour: number): string {
+  const now = new Date();
+  if (now.getHours() < resetHour) now.setDate(now.getDate() - 1);
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
 
 const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 const MONTHS = [
@@ -24,10 +31,15 @@ function getFirstDayOfMonth(year: number, month: number) {
   return day === 0 ? 6 : day - 1;
 }
 
-export default function CalendarScreen({ theme, stepGoal, history, onClose }: Props) {
-  const today = new Date();
-  const [viewYear, setViewYear] = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth());
+export default function CalendarScreen({ theme, stepGoal, history, resetHour, onClose }: Props) {
+  const periodTodayKey = getTodayKey(resetHour);
+  const [pyStr, pmStr, pdStr] = periodTodayKey.split('-');
+  const periodYear  = parseInt(pyStr, 10);
+  const periodMonth = parseInt(pmStr, 10) - 1; // 0-indexed
+  const periodDay   = parseInt(pdStr, 10);
+
+  const [viewYear, setViewYear] = useState(periodYear);
+  const [viewMonth, setViewMonth] = useState(periodMonth);
 
   const daysInMonth = getDaysInMonth(viewYear, viewMonth);
   const firstDay = getFirstDayOfMonth(viewYear, viewMonth);
@@ -47,11 +59,7 @@ export default function CalendarScreen({ theme, stepGoal, history, onClose }: Pr
   }
 
   function getDayColor(day: number) {
-    const dateObj = new Date(viewYear, viewMonth, day);
-    dateObj.setHours(0, 0, 0, 0);
-    const todayClean = new Date();
-    todayClean.setHours(0, 0, 0, 0);
-    if (dateObj > todayClean) return 'transparent';
+    if (getDateKey(day) > periodTodayKey) return 'transparent';
     const key = getDateKey(day);
     if (!history[key]) return theme.border;
     return history[key] >= stepGoal ? '#4CAF50' : '#f44336';
@@ -62,17 +70,13 @@ export default function CalendarScreen({ theme, stepGoal, history, onClose }: Pr
   }
 
   function isToday(day: number) {
-    return day === today.getDate() &&
-      viewMonth === today.getMonth() &&
-      viewYear === today.getFullYear();
+    return day === periodDay &&
+      viewMonth === periodMonth &&
+      viewYear === periodYear;
   }
 
   function isFuture(day: number) {
-    const dateObj = new Date(viewYear, viewMonth, day);
-    dateObj.setHours(0, 0, 0, 0);
-    const todayClean = new Date();
-    todayClean.setHours(0, 0, 0, 0);
-    return dateObj > todayClean;
+    return getDateKey(day) > periodTodayKey;
   }
 
   const blanks = Array(firstDay).fill(null);
