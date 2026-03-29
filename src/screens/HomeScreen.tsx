@@ -9,22 +9,10 @@ type Props = {
   stepGoal: number;
   theme: Theme;
   displayMode: DisplayMode;
-  totalPedometerSteps: number;
   onOpenSettings: () => void;
   onOpenCalendar: () => void;
 };
 
-function formatShort(n: number): string {
-  const fmt = (val: number) => {
-    const s = val.toFixed(1);
-    return s.endsWith('.0') ? String(Math.round(val)) : s.replace('.', ',');
-  };
-  if (n >= 1_000_000_000_000) return `${fmt(n / 1_000_000_000_000)} Billionen`;
-  if (n >= 1_000_000_000)     return `${fmt(n / 1_000_000_000)} Milliarden`;
-  if (n >= 1_000_000)         return `${fmt(n / 1_000_000)} Millionen`;
-  if (n >= 1_000)             return `${fmt(n / 1_000)} Tausend`;
-  return String(n);
-}
 
 export default function HomeScreen({
   androidSteps,
@@ -32,7 +20,6 @@ export default function HomeScreen({
   stepGoal,
   theme,
   displayMode,
-  totalPedometerSteps,
   onOpenSettings,
   onOpenCalendar,
 }: Props) {
@@ -148,22 +135,6 @@ export default function HomeScreen({
         </View>
       )}
 
-      {/* Gerät-Lifetime-Schritte */}
-      {totalPedometerSteps > 0 && (
-        <View style={[styles.lifetimeBox, { backgroundColor: theme.card }]}>
-          <Text style={[styles.lifetimeText, { color: theme.subtext }]}>
-            Mit diesem Gerät bist du schon{' '}
-            <Text style={{ color: theme.text, fontWeight: '600' }}>
-              {totalPedometerSteps.toLocaleString('de-DE')}
-            </Text>
-            {' '}Schritte gelaufen – das sind etwa{' '}
-            <Text style={{ color: theme.text, fontWeight: '600' }}>
-              {formatShort(totalPedometerSteps)}
-            </Text>
-            .
-          </Text>
-        </View>
-      )}
 
     </View>
   );
@@ -278,16 +249,5 @@ const styles = StyleSheet.create({
   warningText: {
     fontSize: 14,
     textAlign: 'center',
-  },
-  lifetimeBox: {
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    width: '80%',
-  },
-  lifetimeText: {
-    fontSize: 12,
-    textAlign: 'center',
-    lineHeight: 18,
   },
 });

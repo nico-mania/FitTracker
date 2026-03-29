@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { Platform, PermissionsAndroid, BackHandler } from 'react-native';
+import { Platform, PermissionsAndroid, BackHandler, AppState } from 'react-native';
 import { Pedometer, Accelerometer } from 'expo-sensors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
@@ -47,9 +47,8 @@ async function requestPermissions() {
 
 export default function App() {
   const [screen, setScreen]               = useState<Screen>('home');
-  const [androidSteps,          setAndroidSteps]          = useState(0);
-  const [sensorSteps,           setSensorSteps]           = useState(0);
-  const [totalPedometerSteps,   setTotalPedometerSteps]   = useState(0);
+  const [androidSteps, setAndroidSteps] = useState(0);
+  const [sensorSteps,  setSensorSteps]  = useState(0);
   const [darkMode,     setDarkMode]       = useState(true);
   const [resetHour,    setResetHour]      = useState(4);
   const [stepGoal,     setStepGoal]       = useState(10000);
@@ -159,6 +158,29 @@ export default function App() {
     });
     return () => handler.remove();
   }, [screen]);
+
+  // ── Foreground recovery: re-anchor delta on every app resume ─────────────
+
+  useEffect(() => {
+    const appStateRef = { current: AppState.currentState };
+    const sub = AppState.addEventListener('change', nextState => {
+      if (
+        (appStateRef.current === 'background' || appStateRef.current === 'inactive') &&
+        nextState === 'active'
+      ) {
+        // App came back to foreground — re-anchor so delta recovery fires
+        // on the next pedometer event, catching any steps missed while away
+        startupBaseStepsRef.current = androidStepsRef.current;
+        periodChangedOnStartup.current = false;
+        if (pedometerBaseRef.current !== null) {
+          lastPedometerTotalRef.current = pedometerBaseRef.current;
+        }
+        pedometerBaseRef.current = null;
+      }
+      appStateRef.current = nextState;
+    });
+    return () => sub.remove();
+  }, []);
 
   // ── Keep refs in sync ────────────────────────────────────────────────────
 
@@ -337,7 +359,6 @@ export default function App() {
             // Persist current hardware total for the next session
             lastPedometerTotalRef.current = result.steps;
             AsyncStorage.setItem('lastPedometerTotal', result.steps.toString()).catch(() => {});
-            setTotalPedometerSteps(result.steps);
             return;
           }
           const delta = result.steps - pedometerBaseRef.current;
@@ -348,7 +369,6 @@ export default function App() {
               return updated;
             });
             pedometerBaseRef.current = result.steps;
-            setTotalPedometerSteps(result.steps);
 
             // Persist every step update (including intermediate calendar entry)
             const key = getTodayKey(resetHourRef.current);
@@ -496,7 +516,6 @@ export default function App() {
           stepGoal={stepGoal}
           theme={theme}
           displayMode={displayMode}
-          totalPedometerSteps={totalPedometerSteps}
           onOpenSettings={() => setScreen('settings')}
           onOpenCalendar={() => setScreen('calendar')}
         />
