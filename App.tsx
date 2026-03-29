@@ -518,6 +518,19 @@ export default function App() {
           displayMode={displayMode}
           onOpenSettings={() => setScreen('settings')}
           onOpenCalendar={() => setScreen('calendar')}
+          // [DEV] injects steps manually via developer tools panel
+          onAddSteps={(n: number) => {
+            const updated = androidStepsRef.current + n;
+            setAndroidSteps(updated);
+            androidStepsRef.current = updated;
+            const key = getTodayKey(resetHourRef.current);
+            AsyncStorage.setItem('currentSteps', updated.toString()).catch(() => {});
+            AsyncStorage.setItem('currentStepsDate', key).catch(() => {});
+            const histUpdated = { ...historyRef.current, [key]: updated };
+            historyRef.current = histUpdated;
+            setHistory(histUpdated);
+            AsyncStorage.setItem('stepHistory', JSON.stringify(histUpdated)).catch(() => {});
+          }}
         />
       )}
       {screen === 'settings' && (

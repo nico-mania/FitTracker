@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, TextInput } from 'react-native';
 import { Theme } from '../theme';
 import { DisplayMode } from './SettingsScreen';
 
@@ -11,6 +11,8 @@ type Props = {
   displayMode: DisplayMode;
   onOpenSettings: () => void;
   onOpenCalendar: () => void;
+  // [DEV] callback to manually inject steps — not a user-facing feature
+  onAddSteps: (n: number) => void;
 };
 
 
@@ -22,7 +24,11 @@ export default function HomeScreen({
   displayMode,
   onOpenSettings,
   onOpenCalendar,
+  onAddSteps, // [DEV]
 }: Props) {
+  // [DEV] hidden developer tools — toggled by holding the title for 5 seconds
+  const [devVisible, setDevVisible] = useState(false);
+  const [devInput,   setDevInput]   = useState('');
   const averageSteps = Math.round((androidSteps + sensorSteps) / 2);
   const activeSteps =
     displayMode === 'sensor'  ? sensorSteps :
@@ -37,7 +43,14 @@ export default function HomeScreen({
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.text }]}>FitTracker</Text>
+        {/* [DEV] long-press 5s to toggle developer tools */}
+        <TouchableOpacity
+          activeOpacity={1}
+          delayLongPress={5000}
+          onLongPress={() => setDevVisible(v => !v)}
+        >
+          <Text style={[styles.title, { color: theme.text }]}>FitTracker</Text>
+        </TouchableOpacity>
         <View style={styles.headerButtons}>
           <TouchableOpacity
             onPress={onOpenCalendar}
@@ -135,6 +148,32 @@ export default function HomeScreen({
         </View>
       )}
 
+
+      {/* [DEV] developer tools panel — hidden by default, not a user-facing feature */}
+      {devVisible && (
+        <View style={[styles.devPanel, { backgroundColor: theme.card, borderColor: '#e53935' }]}>
+          <Text style={[styles.devTitle, { color: '#e53935' }]}>Entwicklungstools</Text>
+          <View style={styles.devRow}>
+            <TextInput
+              style={[styles.devInput, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+              value={devInput}
+              onChangeText={setDevInput}
+              placeholder="Schritte eingeben"
+              placeholderTextColor={theme.subtext}
+              keyboardType="numeric"
+            />
+            <TouchableOpacity
+              style={styles.devButton}
+              onPress={() => {
+                const n = parseInt(devInput, 10);
+                if (!isNaN(n) && n > 0) { onAddSteps(n); setDevInput(''); }
+              }}
+            >
+              <Text style={styles.devButtonText}>+ Hinzufügen</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
     </View>
   );
@@ -238,6 +277,43 @@ const styles = StyleSheet.create({
   subInfo: {
     fontSize: 13,
     marginTop: 8,
+  },
+  // [DEV] styles for hidden developer tools panel
+  devPanel: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 14,
+    width: '80%',
+    gap: 10,
+  },
+  devTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  devRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  devInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 14,
+  },
+  devButton: {
+    backgroundColor: '#e53935',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    justifyContent: 'center',
+  },
+  devButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
   },
   warningCard: {
     borderRadius: 8,
