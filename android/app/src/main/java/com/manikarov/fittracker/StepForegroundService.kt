@@ -34,12 +34,17 @@ class StepForegroundService : Service(), SensorEventListener {
 
   private lateinit var sensorManager: SensorManager
   private lateinit var sharedPreferences: SharedPreferences
-  private var stepDetectorSensor: Sensor? = null
+  private var stepCounterSensor: Sensor? = null
   private var stepsToday = 0
+
+  // TYPE_STEP_COUNTER is cumulative since boot — we track a base to compute deltas
+  private var stepsAtServiceStart = 0   // stepsToday value when this service instance started
+  private var baseStepCount: Long = -1  // hardware counter value at first sensor event
+  private var lastHardwareCount: Long = -1 // most recent hardware counter, used during resets
+
   private val handler = Handler(Looper.getMainLooper())
 
   // Returns the day key adjusted for the user's reset hour.
-  // E.g. if reset is at 4:00 and it's 2:00, we're still "yesterday".
   private fun getCurrentDayKey(resetHour: Int): String {
     val cal = Calendar.getInstance()
     if (cal.get(Calendar.HOUR_OF_DAY) < resetHour) {
@@ -82,7 +87,6 @@ class StepForegroundService : Service(), SensorEventListener {
         .putString(LAST_DAY_KEY, currentDayKey)
         .apply()
     } else {
-      // Check for a reset signal written by JS before restoring saved steps
       if (checkResetSignal(currentDayKey)) {
         stepsToday = 0
       } else {
@@ -90,18 +94,24 @@ class StepForegroundService : Service(), SensorEventListener {
       }
     }
 
+    // Remember what stepsToday was when this service instance started,
+    // so we can add the TYPE_STEP_COUNTER delta on top of it
+    stepsAtServiceStart = stepsToday
+
     writeStepsToFile(stepsToday, currentDayKey)
 
     sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
-    stepDetectorSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
-    if (stepDetectorSensor != null) {
-      sensorManager.registerListener(this, stepDetectorSensor, SensorManager.SENSOR_DELAY_NORMAL)
+    // TYPE_STEP_COUNTER: cumulative hardware counter — much more reliable in
+    // the background than TYPE_STEP_DETECTOR (which requires CPU to be awake)
+    stepCounterSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+    if (stepCounterSensor != null) {
+      sensorManager.registerListener(this, stepCounterSensor, SensorManager.SENSOR_DELAY_NORMAL)
     }
 
     createNotificationChannel()
     startForegroundCompat()
 
-    // Periodically check for day rollover and reset signal (every 30 s)
+    // Periodically check for day rollover and reset signal (every 5 s)
     schedulePeriodicCheck()
   }
 
@@ -111,27 +121,33 @@ class StepForegroundService : Service(), SensorEventListener {
       val currentDayKey = getCurrentDayKey(resetHour)
       val lastDayKey = sharedPreferences.getString(LAST_DAY_KEY, currentDayKey)
 
-      when {
-        lastDayKey != currentDayKey -> {
-          // Day rolled over
-          stepsToday = 0
-          sharedPreferences.edit()
-            .putInt(STEPS_KEY, 0)
-            .putString(LAST_DAY_KEY, currentDayKey)
-            .apply()
-          writeStepsToFile(0, currentDayKey)
-          updateNotification()
-        }
-        checkResetSignal(currentDayKey) -> {
-          stepsToday = 0
-          sharedPreferences.edit().putInt(STEPS_KEY, 0).apply()
-          writeStepsToFile(0, currentDayKey)
-          updateNotification()
-        }
+      if (lastDayKey != currentDayKey) {
+        // Day rolled over — reset and re-anchor the counter base
+        applyReset(currentDayKey)
+      } else if (checkResetSignal(currentDayKey)) {
+        // JS sent a reset signal
+        applyReset(currentDayKey)
       }
+      // Always sync from JS and refresh notification every tick,
+      // regardless of whether a reset just happened
+      syncFromJsSteps(currentDayKey)
 
       schedulePeriodicCheck()
     }, 5_000L)
+  }
+
+  // Resets step count and re-anchors the hardware counter base so that
+  // the next sensor event correctly produces a delta of 0.
+  private fun applyReset(currentDayKey: String) {
+    stepsToday = 0
+    stepsAtServiceStart = 0
+    if (lastHardwareCount >= 0) baseStepCount = lastHardwareCount
+    sharedPreferences.edit()
+      .putInt(STEPS_KEY, 0)
+      .putString(LAST_DAY_KEY, currentDayKey)
+      .apply()
+    writeStepsToFile(0, currentDayKey)
+    updateNotification()
   }
 
   // Returns true and cleans up if a JS reset signal file exists.
@@ -149,7 +165,28 @@ class StepForegroundService : Service(), SensorEventListener {
     } catch (_: Exception) { false }
   }
 
-  // Write steps.txt (step count) and day.txt (current day key) for JS to read.
+  // Read JS-written step count and adopt it if higher than current service count.
+  // This keeps the notification in sync with what the app actually displays.
+  private fun syncFromJsSteps(currentDayKey: String) {
+    try {
+      val stepsFile = File(filesDir, "js_steps.txt")
+      val dateFile  = File(filesDir, "js_steps_date.txt")
+      if (!stepsFile.exists() || !dateFile.exists()) { updateNotification(); return }
+      val jsDate  = dateFile.readText().trim()
+      val jsSteps = stepsFile.readText().trim().toIntOrNull()
+      if (jsSteps != null && jsDate == currentDayKey && jsSteps > stepsToday) {
+        stepsToday = jsSteps
+        stepsAtServiceStart = jsSteps
+        // Re-anchor base so next sensor delta starts from the synced value
+        if (lastHardwareCount >= 0) baseStepCount = lastHardwareCount
+        sharedPreferences.edit().putInt(STEPS_KEY, stepsToday).apply()
+        writeStepsToFile(stepsToday, currentDayKey)
+      }
+    } catch (_: Exception) {}
+    updateNotification()
+  }
+
+  // Write steps.txt and day.txt for JS to read.
   private fun writeStepsToFile(steps: Int, dayKey: String) {
     try {
       File(filesDir, "steps.txt").writeText(steps.toString())
@@ -159,6 +196,10 @@ class StepForegroundService : Service(), SensorEventListener {
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     startForegroundCompat()
+    // Sync JS step count immediately when app (re)opens — JS may have written
+    // js_steps.txt from a previous session or just written it on this launch
+    val currentDayKey = getCurrentDayKey(getResetHour())
+    syncFromJsSteps(currentDayKey)
     return START_STICKY
   }
 
@@ -172,20 +213,33 @@ class StepForegroundService : Service(), SensorEventListener {
   override fun onBind(intent: Intent?): IBinder? = null
 
   override fun onSensorChanged(event: SensorEvent?) {
-    if (event?.sensor?.type != Sensor.TYPE_STEP_DETECTOR) return
-    if (event.values.isEmpty() || event.values[0] != 1.0f) return
+    if (event?.sensor?.type != Sensor.TYPE_STEP_COUNTER) return
+    if (event.values.isEmpty()) return
+
+    val hardwareCount = event.values[0].toLong()
+    lastHardwareCount = hardwareCount
+
+    // Anchor the base on the very first event after (re)start
+    if (baseStepCount < 0) {
+      baseStepCount = hardwareCount
+    }
 
     val resetHour = sharedPreferences.getInt(RESET_HOUR_KEY, 4)
     val currentDayKey = getCurrentDayKey(resetHour)
     val lastDayKey = sharedPreferences.getString(LAST_DAY_KEY, currentDayKey)
 
     if (lastDayKey != currentDayKey) {
-      // Day rolled over mid-session
-      stepsToday = 0
+      // Day rolled over mid-session — re-anchor so delta restarts from 0
+      stepsAtServiceStart = 0
+      baseStepCount = hardwareCount
       sharedPreferences.edit().putString(LAST_DAY_KEY, currentDayKey).apply()
     }
 
-    stepsToday += 1
+    // Delta from the hardware counter since this service instance started,
+    // added on top of the saved steps from before the service started
+    val delta = (hardwareCount - baseStepCount).coerceAtLeast(0).toInt()
+    stepsToday = stepsAtServiceStart + delta
+
     sharedPreferences.edit().putInt(STEPS_KEY, stepsToday).apply()
     writeStepsToFile(stepsToday, currentDayKey)
     updateNotification()
@@ -225,7 +279,7 @@ class StepForegroundService : Service(), SensorEventListener {
     )
     return NotificationCompat.Builder(this, CHANNEL_ID)
       .setContentTitle("FitTracker läuft")
-      .setContentText("Schritte heute: $stepsToday")
+      .setContentText("Schrittzähler aktiv")
       .setSmallIcon(R.mipmap.ic_launcher)
       .setContentIntent(pendingIntent)
       .setOnlyAlertOnce(true)
